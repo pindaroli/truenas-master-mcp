@@ -458,7 +458,7 @@ impl TrueNasServerImpl {
                     .await
                     .map_err(|e| e.to_string())?;
 
-                let uptime_secs = system_info.uptime_seconds.unwrap_or(0);
+                let uptime_secs = system_info.uptime_seconds.map(|u| u as u64).unwrap_or(0);
                 let uptime_days = uptime_secs / 86400;
                 let uptime_hours = (uptime_secs % 86400) / 3600;
                 let uptime_str = format!("{}d {}h", uptime_days, uptime_hours);
@@ -827,7 +827,7 @@ impl TrueNasServerImpl {
                 let analysis = format!(
                     "# TrueNAS Performance Analysis\n\n## System Information\n- **Version:** {}\n- **Uptime:** {} seconds\n- **CPU:** {}\n\n## Pool Performance\n{}\n\n## VM Resource Usage\n- **Total VMs:** {}\n- **High-memory VMs (>8GB):** {}\n\n## Application Resources\n- **Running apps:** {}\n- **Resource-intensive apps:** {}\n\n## Performance Warnings\n{}\n\n## Recommendations\n{}",
                     system_info.version,
-                    system_info.uptime_seconds.unwrap_or(0),
+                    system_info.uptime_seconds.map(|u| u as u64).unwrap_or(0),
                     system_info
                         .cpu_model
                         .unwrap_or_else(|| "Unknown".to_string()),
@@ -1177,7 +1177,7 @@ impl TrueNasServerImpl {
                     issue,
                     system_info.version,
                     system_info.hostname,
-                    system_info.uptime_seconds.unwrap_or(0),
+                    system_info.uptime_seconds.map(|u| u as u64).unwrap_or(0),
                     if relevant_alerts.is_empty() {
                         "No directly relevant alerts found. Check full alert list.".to_string()
                     } else {
@@ -2243,10 +2243,38 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                 let name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
                 let empty_args = json!({});
                 let arguments = params.get("arguments").unwrap_or(&empty_args);
-                server
+                let tool_res = server
                     .call_tool(name, arguments)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Tool error: {}", e))
+                    .await;
+
+                match tool_res {
+                    Ok(val) => {
+                        let text = match val {
+                            Value::String(s) => s,
+                            other => serde_json::to_string_pretty(&other).unwrap_or_else(|_| other.to_string()),
+                        };
+                        Ok(json!({
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": text
+                                }
+                            ],
+                            "isError": false
+                        }))
+                    }
+                    Err(e) => {
+                        Ok(json!({
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": format!("Error executing tool '{}': {}", name, e)
+                                }
+                            ],
+                            "isError": true
+                        }))
+                    }
+                }
             }.await;
             get_result
         }

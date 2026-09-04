@@ -352,14 +352,18 @@ pub struct IscsiTarget {
     pub status: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SystemInfo {
+    #[serde(default)]
     pub version: String,
+    #[serde(default)]
     pub hostname: String,
     #[serde(default)]
     pub cpu_model: Option<String>,
     #[serde(default)]
-    pub uptime_seconds: Option<u64>,
+    pub uptime_seconds: Option<f64>,
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// App information for TrueNAS apps/jails
