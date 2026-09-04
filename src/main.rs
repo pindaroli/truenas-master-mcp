@@ -2229,6 +2229,9 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
             // Standard MCP notification, safely ignore
             return Ok(None);
         }
+        "ping" => {
+            Ok(json!({}))
+        }
         "tools/list" => {
             Ok(json!({
                 "tools": server.list_tools()
