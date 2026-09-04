@@ -39,10 +39,7 @@ impl TrueNasClient {
             builder = builder.danger_accept_invalid_certs(true);
         }
 
-        // Prefer HTTP/2 for better multiplexing (graceful fallback to 1.1)
-        if config.server_url.starts_with("https://") {
-            builder = builder.http2_prior_knowledge();
-        }
+
 
         let client = builder.build().map_err(|e| {
             TrueNasError::ConfigError(format!("Failed to build HTTP client: {}", e))

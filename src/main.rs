@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env().add_directive(log_level.into()))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr).with_ansi(false))
         .init();
 
     info!("TrueNAS MCP Server v{}", env!("CARGO_PKG_VERSION"));
@@ -2137,26 +2137,74 @@ async fn run_stdio(server: Arc<TrueNasServerImpl>) -> anyhow::Result<()> {
             break;
         }
 
-        if line.is_empty() {
+        if line.trim().is_empty() {
             continue;
         }
 
-        let request: Value =
-            serde_json::from_str(&line).context("Failed to parse JSON-RPC request")?;
+        let request: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(e) => {
+                // Parse error - send JSON-RPC error response instead of crashing
+                let response = json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": {
+                        "code": -32700,
+                        "message": format!("Parse error: {}", e)
+                    }
+                }).to_string();
+                let mut response_line = response;
+                response_line.push('\n');
+                if let Err(write_err) = writer.write_all(response_line.as_bytes()).await {
+                    tracing::error!("Failed to write parse error response: {}", write_err);
+                }
+                let _ = writer.flush().await;
+                continue;
+            }
+        };
 
-        let response = handle_request(&server, request).await?;
-
-        writer.write_all(response.as_bytes()).await?;
-        writer.flush().await?;
+        match handle_request(&server, request).await {
+            Ok(Some(response)) => {
+                let mut response_line = response;
+                response_line.push('\n');
+                writer.write_all(response_line.as_bytes()).await?;
+                writer.flush().await?;
+            }
+            Ok(None) => {
+                // It was a notification, no response required
+            }
+            Err(e) => {
+                tracing::error!("Internal error handling request: {}", e);
+            }
+        }
     }
 
     Ok(())
 }
 
 /// Handle MCP JSON-RPC request
-async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::Result<String> {
-    let method = request["method"].as_str().context("Missing method")?;
-    let id = request.get("id").cloned().unwrap_or(json!(null));
+async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::Result<Option<String>> {
+    let method = match request["method"].as_str() {
+        Some(m) => m,
+        None => {
+            let id = request.get("id").cloned();
+            if id.is_some() {
+                let err_resp = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": {
+                        "code": -32600,
+                        "message": "Invalid Request: Missing method"
+                    }
+                }).to_string();
+                return Ok(Some(err_resp));
+            }
+            return Ok(None);
+        }
+    };
+
+    let id = request.get("id").cloned();
+    let is_notification = id.is_none();
 
     let result = match method {
         "initialize" => {
@@ -2171,54 +2219,110 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                     "get": true
                 }
             });
-            json!({
+            Ok(json!({
+                "protocolVersion": "2024-11-05",
                 "serverInfo": server.get_server_info(),
                 "capabilities": capabilities
-            })
+            }))
+        }
+        "notifications/initialized" => {
+            // Standard MCP notification, safely ignore
+            return Ok(None);
         }
         "tools/list" => {
-            json!({
+            Ok(json!({
                 "tools": server.list_tools()
-            })
+            }))
         }
         "tools/call" => {
-            let params = request.get("params").context("Missing params")?;
-            let name = params["name"].as_str().context("Missing tool name")?;
-            let empty_args = json!({});
-            let arguments = params.get("arguments").unwrap_or(&empty_args);
-            server
-                .call_tool(name, arguments)
-                .await
-                .map_err(|e| anyhow::anyhow!("Tool error: {}", e))?
+            let get_result = async {
+                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+                let empty_args = json!({});
+                let arguments = params.get("arguments").unwrap_or(&empty_args);
+                server
+                    .call_tool(name, arguments)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Tool error: {}", e))
+            }.await;
+            get_result
         }
-        "resources/list" => server.list_resources(),
+        "resources/list" => {
+            Ok(server.list_resources())
+        }
         "resources/read" => {
-            let params = request.get("params").context("Missing params")?;
-            let uri = params["uri"].as_str().context("Missing resource URI")?;
-            server
-                .read_resource(uri)
-                .await
-                .map_err(|e| anyhow::anyhow!("Resource error: {}", e))?
+            let get_result = async {
+                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let uri = params["uri"].as_str().ok_or_else(|| anyhow::anyhow!("Missing resource URI"))?;
+                server
+                    .read_resource(uri)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Resource error: {}", e))
+            }.await;
+            get_result
         }
-        "prompts/list" => server.list_prompts(),
+        "prompts/list" => {
+            Ok(server.list_prompts())
+        }
         "prompts/get" => {
-            let params = request.get("params").context("Missing params")?;
-            let name = params["name"].as_str().context("Missing prompt name")?;
-            let arguments = params.get("arguments");
-            server
-                .get_prompt(name, arguments)
-                .await
-                .map_err(|e| anyhow::anyhow!("Prompt error: {}", e))?
+            let get_result = async {
+                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing prompt name"))?;
+                let arguments = params.get("arguments");
+                server
+                    .get_prompt(name, arguments)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Prompt error: {}", e))
+            }.await;
+            get_result
         }
-        _ => return Err(anyhow::anyhow!("Unknown method: {}", method)),
+        _ => {
+            if is_notification {
+                return Ok(None);
+            } else {
+                let err_resp = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": {
+                        "code": -32601,
+                        "message": format!("Method not found: {}", method)
+                    }
+                }).to_string();
+                return Ok(Some(err_resp));
+            }
+        }
     };
 
-    Ok(json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": result
-    })
-    .to_string())
+    match result {
+        Ok(res_val) => {
+            if is_notification {
+                Ok(None)
+            } else {
+                let resp = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": res_val
+                }).to_string();
+                Ok(Some(resp))
+            }
+        }
+        Err(e) => {
+            if is_notification {
+                tracing::warn!("Error processing notification '{}': {}", method, e);
+                Ok(None)
+            } else {
+                let err_resp = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": {
+                        "code": -32603,
+                        "message": format!("Internal error: {}", e)
+                    }
+                }).to_string();
+                Ok(Some(err_resp))
+            }
+        }
+    }
 }
 
 /// Build CORS layer based on environment configuration
@@ -2275,7 +2379,8 @@ async fn run_http(server: Arc<TrueNasServerImpl>, host: &str, port: u16) -> anyh
                 let response = handle_request(&server, request).await
                     .map_err(|e| tracing::error!("Request error: {}", e));
                 match response {
-                    Ok(r) => axum::Json(serde_json::from_str::<Value>(&r).unwrap_or_else(|_| json!({"error": "Invalid response"}))),
+                    Ok(Some(r)) => axum::Json(serde_json::from_str::<Value>(&r).unwrap_or_else(|_| json!({"error": "Invalid response"}))),
+                    Ok(None) => axum::Json(json!({"jsonrpc": "2.0", "result": null})),
                     Err(_) => axum::Json(json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32603, "message": "Internal error"}})),
                 }
             }
@@ -2317,7 +2422,8 @@ async fn run_sse(server: Arc<TrueNasServerImpl>, host: &str, port: u16) -> anyho
                 let response = handle_request(&server, request).await
                     .map_err(|e| tracing::error!("Request error: {}", e));
                 match response {
-                    Ok(r) => axum::Json(serde_json::from_str::<Value>(&r).unwrap_or_else(|_| json!({"error": "Invalid response"}))),
+                    Ok(Some(r)) => axum::Json(serde_json::from_str::<Value>(&r).unwrap_or_else(|_| json!({"error": "Invalid response"}))),
+                    Ok(None) => axum::Json(json!({"jsonrpc": "2.0", "result": null})),
                     Err(_) => axum::Json(json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32603, "message": "Internal error"}})),
                 }
             }
