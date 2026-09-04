@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for truenas-master-mcp (linux/amd64)
-FROM rust:1.85-alpine AS builder
+FROM rust:alpine AS builder
 
 RUN apk add --no-cache musl-dev perl make pkgconfig openssl-dev
 

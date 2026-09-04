@@ -195,25 +195,25 @@ impl TrueNasConfig {
     /// Apply environment variable overrides
     #[allow(clippy::collapsible_if)]
     fn apply_env_overrides(&mut self) {
-        if let Ok(url) = env::var("TRUENAS_SERVER_URL")
-            && !url.is_empty()
-        {
-            self.server_url = url;
+        if let Ok(url) = env::var("TRUENAS_SERVER_URL") {
+            if !url.is_empty() {
+                self.server_url = url;
+            }
         }
-        if let Ok(key) = env::var("TRUENAS_API_KEY")
-            && !key.is_empty()
-        {
-            self.api_key = Some(key);
+        if let Ok(key) = env::var("TRUENAS_API_KEY") {
+            if !key.is_empty() {
+                self.api_key = Some(key);
+            }
         }
-        if let Ok(user) = env::var("TRUENAS_USERNAME")
-            && !user.is_empty()
-        {
-            self.username = Some(user);
+        if let Ok(user) = env::var("TRUENAS_USERNAME") {
+            if !user.is_empty() {
+                self.username = Some(user);
+            }
         }
-        if let Ok(pass) = env::var("TRUENAS_PASSWORD")
-            && !pass.is_empty()
-        {
-            self.password = Some(pass);
+        if let Ok(pass) = env::var("TRUENAS_PASSWORD") {
+            if !pass.is_empty() {
+                self.password = Some(pass);
+            }
         }
         if let Ok(ssl) = env::var("TRUENAS_VERIFY_SSL") {
             if ssl.parse::<bool>().unwrap_or(false) {
@@ -268,12 +268,12 @@ impl TrueNasConfig {
         }
 
         // Validate API key format if provided
-        if let Some(key) = &self.api_key
-            && key.len() < 10
-        {
-            return Err(TrueNasError::ConfigError(
-                "TRUENAS_API_KEY appears to be too short".to_string(),
-            ));
+        if let Some(key) = &self.api_key {
+            if key.len() < 10 {
+                return Err(TrueNasError::ConfigError(
+                    "TRUENAS_API_KEY appears to be too short".to_string(),
+                ));
+            }
         }
 
         // Validate timeout bounds
