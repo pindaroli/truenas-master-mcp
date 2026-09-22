@@ -2460,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "truenas-master-mcp"
-version = "0.1.11"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
