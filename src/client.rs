@@ -39,8 +39,6 @@ impl TrueNasClient {
             builder = builder.danger_accept_invalid_certs(true);
         }
 
-
-
         let client = builder.build().map_err(|e| {
             TrueNasError::ConfigError(format!("Failed to build HTTP client: {}", e))
         })?;

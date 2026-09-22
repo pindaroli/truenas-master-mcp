@@ -268,12 +268,12 @@ impl TrueNasConfig {
         }
 
         // Validate API key format if provided
-        if let Some(key) = &self.api_key {
-            if key.len() < 10 {
-                return Err(TrueNasError::ConfigError(
-                    "TRUENAS_API_KEY appears to be too short".to_string(),
-                ));
-            }
+        if let Some(key) = &self.api_key
+            && key.len() < 10
+        {
+            return Err(TrueNasError::ConfigError(
+                "TRUENAS_API_KEY appears to be too short".to_string(),
+            ));
         }
 
         // Validate timeout bounds

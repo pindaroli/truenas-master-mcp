@@ -94,7 +94,11 @@ async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env().add_directive(log_level.into()))
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr).with_ansi(false))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_ansi(false),
+        )
         .init();
 
     info!("TrueNAS MCP Server v{}", env!("CARGO_PKG_VERSION"));
@@ -795,11 +799,7 @@ impl TrueNasServerImpl {
                 let pool_usage: Vec<_> = pools
                     .iter()
                     .map(|p| {
-                        let used_pct = if p.size > 0 {
-                            (p.size - p.free) * 100 / p.size
-                        } else {
-                            0
-                        };
+                        let used_pct = ((p.size - p.free) * 100).checked_div(p.size).unwrap_or(0);
                         json!({
                             "name": p.name,
                             "status": p.status,
@@ -873,18 +873,10 @@ impl TrueNasServerImpl {
                 let total_size: u64 = pools.iter().map(|p| p.size).sum();
                 let total_free: u64 = pools.iter().map(|p| p.free).sum();
                 let total_used = total_size.saturating_sub(total_free);
-                let usage_percent = if total_size > 0 {
-                    total_used * 100 / total_size
-                } else {
-                    0
-                };
+                let usage_percent = (total_used * 100).checked_div(total_size).unwrap_or(0);
 
                 let dataset_count = datasets.len();
-                let avg_dataset_size = if dataset_count > 0 {
-                    total_used / dataset_count as u64
-                } else {
-                    0
-                };
+                let avg_dataset_size = total_used.checked_div(dataset_count as u64).unwrap_or(0);
 
                 let growth_rate_estimate = 10; // Assume 10% monthly growth (configurable)
                 let months_until_full = if usage_percent > 0 {
@@ -2152,7 +2144,8 @@ async fn run_stdio(server: Arc<TrueNasServerImpl>) -> anyhow::Result<()> {
                         "code": -32700,
                         "message": format!("Parse error: {}", e)
                     }
-                }).to_string();
+                })
+                .to_string();
                 let mut response_line = response;
                 response_line.push('\n');
                 if let Err(write_err) = writer.write_all(response_line.as_bytes()).await {
@@ -2183,7 +2176,10 @@ async fn run_stdio(server: Arc<TrueNasServerImpl>) -> anyhow::Result<()> {
 }
 
 /// Handle MCP JSON-RPC request
-async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::Result<Option<String>> {
+async fn handle_request(
+    server: &TrueNasServerImpl,
+    request: Value,
+) -> anyhow::Result<Option<String>> {
     let method = match request["method"].as_str() {
         Some(m) => m,
         None => {
@@ -2196,7 +2192,8 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                         "code": -32600,
                         "message": "Invalid Request: Missing method"
                     }
-                }).to_string();
+                })
+                .to_string();
                 return Ok(Some(err_resp));
             }
             return Ok(None);
@@ -2229,29 +2226,28 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
             // Standard MCP notification, safely ignore
             return Ok(None);
         }
-        "ping" => {
-            Ok(json!({}))
-        }
-        "tools/list" => {
-            Ok(json!({
-                "tools": server.list_tools()
-            }))
-        }
+        "ping" => Ok(json!({})),
+        "tools/list" => Ok(json!({
+            "tools": server.list_tools()
+        })),
         "tools/call" => {
-            let get_result = async {
-                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
-                let name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+            async {
+                let params = request
+                    .get("params")
+                    .ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let name = params["name"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
                 let empty_args = json!({});
                 let arguments = params.get("arguments").unwrap_or(&empty_args);
-                let tool_res = server
-                    .call_tool(name, arguments)
-                    .await;
+                let tool_res = server.call_tool(name, arguments).await;
 
                 match tool_res {
                     Ok(val) => {
                         let text = match val {
                             Value::String(s) => s,
-                            other => serde_json::to_string_pretty(&other).unwrap_or_else(|_| other.to_string()),
+                            other => serde_json::to_string_pretty(&other)
+                                .unwrap_or_else(|_| other.to_string()),
                         };
                         Ok(json!({
                             "content": [
@@ -2263,49 +2259,51 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                             "isError": false
                         }))
                     }
-                    Err(e) => {
-                        Ok(json!({
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": format!("Error executing tool '{}': {}", name, e)
-                                }
-                            ],
-                            "isError": true
-                        }))
-                    }
+                    Err(e) => Ok(json!({
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": format!("Error executing tool '{}': {}", name, e)
+                            }
+                        ],
+                        "isError": true
+                    })),
                 }
-            }.await;
-            get_result
+            }
+            .await
         }
-        "resources/list" => {
-            Ok(server.list_resources())
-        }
+        "resources/list" => Ok(server.list_resources()),
         "resources/read" => {
-            let get_result = async {
-                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
-                let uri = params["uri"].as_str().ok_or_else(|| anyhow::anyhow!("Missing resource URI"))?;
+            async {
+                let params = request
+                    .get("params")
+                    .ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let uri = params["uri"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing resource URI"))?;
                 server
                     .read_resource(uri)
                     .await
                     .map_err(|e| anyhow::anyhow!("Resource error: {}", e))
-            }.await;
-            get_result
+            }
+            .await
         }
-        "prompts/list" => {
-            Ok(server.list_prompts())
-        }
+        "prompts/list" => Ok(server.list_prompts()),
         "prompts/get" => {
-            let get_result = async {
-                let params = request.get("params").ok_or_else(|| anyhow::anyhow!("Missing params"))?;
-                let name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing prompt name"))?;
+            async {
+                let params = request
+                    .get("params")
+                    .ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+                let name = params["name"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing prompt name"))?;
                 let arguments = params.get("arguments");
                 server
                     .get_prompt(name, arguments)
                     .await
                     .map_err(|e| anyhow::anyhow!("Prompt error: {}", e))
-            }.await;
-            get_result
+            }
+            .await
         }
         _ => {
             if is_notification {
@@ -2318,7 +2316,8 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                         "code": -32601,
                         "message": format!("Method not found: {}", method)
                     }
-                }).to_string();
+                })
+                .to_string();
                 return Ok(Some(err_resp));
             }
         }
@@ -2333,7 +2332,8 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                     "jsonrpc": "2.0",
                     "id": id,
                     "result": res_val
-                }).to_string();
+                })
+                .to_string();
                 Ok(Some(resp))
             }
         }
@@ -2349,7 +2349,8 @@ async fn handle_request(server: &TrueNasServerImpl, request: Value) -> anyhow::R
                         "code": -32603,
                         "message": format!("Internal error: {}", e)
                     }
-                }).to_string();
+                })
+                .to_string();
                 Ok(Some(err_resp))
             }
         }

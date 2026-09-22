@@ -8,6 +8,8 @@
 # -----------------------------------------------------------------------------
 # Cargo build directory
 .cargo/
+!.cargo/
+!.cargo/audit.toml
 /target/
 # Per-profile build outputs
 target/*

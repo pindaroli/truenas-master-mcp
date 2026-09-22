@@ -151,7 +151,8 @@ mod serialization_tests {
             version: "TrueNAS-SCALE-24.10.0".to_string(),
             hostname: "truenas.local".to_string(),
             cpu_model: Some("Intel Xeon".to_string()),
-            uptime_seconds: Some(3600),
+            uptime_seconds: Some(3600.0),
+            extra: Default::default(),
         };
 
         let json = serde_json::to_string(&info).unwrap();

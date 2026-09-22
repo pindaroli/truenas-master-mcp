@@ -1,0 +1,11 @@
+# cargo-audit configuration for the TrueNAS 25 REST freeze line (0.2.x).
+
+[advisories]
+ignore = [
+    # rmcp Streamable HTTP Host-header DNS rebinding (RUSTSEC-2026-0189 / GHSA-89vp-x53w-74fx).
+    # This crate depends on rmcp 0.2 only for tool macros / ServerHandler types.
+    # HTTP and SSE transports are implemented with axum in src/main.rs and do not
+    # use rmcp's Streamable HTTP server. Upgrading rmcp to >=1.4.0 is a breaking
+    # SDK migration deferred beyond the 0.2.0 freeze line.
+    "RUSTSEC-2026-0189",
+]
