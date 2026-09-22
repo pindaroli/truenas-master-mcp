@@ -1,8 +1,8 @@
 //! # TrueNAS Master MCP Server
 //!
-//! An official Model Context Protocol (MCP) server for TrueNAS API access.
-//! This server enables AI assistants to interact with TrueNAS SCALE and CORE systems
-//! via their REST API v2.0.
+//! An MCP server for TrueNAS API access.
+//! Calls use JSON-RPC 2.0 over the WebSocket at `/api/current`.
+//! Historical `/api/v2.0` paths are translated inside the client so tool names stay.
 //!
 //! ## Features
 //!
@@ -54,6 +54,8 @@ pub mod cache;
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod rest_map;
+mod rpc;
 pub mod server;
 pub mod tools;
 

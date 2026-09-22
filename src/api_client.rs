@@ -67,34 +67,11 @@ impl ApiClient {
         endpoint: &str,
         body: Option<&impl serde::Serialize>,
     ) -> Result<T> {
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        let mut request = self.client.request(method, &url);
-
-        if let Some(auth) = &self.auth_header {
-            request = request.header(reqwest::header::AUTHORIZATION, auth);
-        }
-
-        if let Some(body) = body {
-            request = request.json(body);
-        }
-
-        let response = request.send().await.map_err(TrueNasError::RequestError)?;
-
-        let status = response.status();
-
-        if !status.is_success() {
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(TrueNasError::ApiError {
-                status: status.as_u16(),
-                message,
-            });
-        }
-
-        response.json().await.map_err(TrueNasError::RequestError)
+        let _ = (&self.client, &self.auth_header, body);
+        Err(TrueNasError::ConfigError(format!(
+            "REST {method} {endpoint} on {} was removed in 1.0.0; this server speaks JSON-RPC over WebSocket",
+            self.base_url
+        )))
     }
 
     // === Pool Operations ===

@@ -487,7 +487,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t truenas-master-mcp --p
 
 ## API Compatibility
 
-This server supports both TrueNAS SCALE and TrueNAS CORE via the REST API v2.0. Set `TRUENAS_VERSION=scale` (default) for TrueNAS SCALE or `TRUENAS_VERSION=core` for TrueNAS CORE.
+This server talks to TrueNAS 26 with JSON-RPC 2.0 over WebSocket (`/api/current`). REST `/api/v2.0` was removed. The last REST image is `0.2.0` (tag `v0.2.0`, branch `tn25`). Set `TRUENAS_VERSION=scale` (default) for TrueNAS SCALE.
 
 The server provides 80+ tools covering:
 - User and group management

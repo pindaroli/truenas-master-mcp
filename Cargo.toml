@@ -1,6 +1,6 @@
 [package]
 name = "truenas-master-mcp"
-version = "0.2.0"
+version = "1.0.0-alpha.0"
 edition = "2024"
 description = "Official MCP server for TrueNAS API access"
 license = "MIT"
@@ -27,9 +27,11 @@ tokio = { version = "1.42", features = ["full"] }
 async-trait = "0.1"
 schemars = "0.8"
 
-# HTTP client for TrueNAS API
+# HTTP client kept for the MCP HTTP/SSE transport. TrueNAS itself is JSON-RPC.
 reqwest = { version = "0.12", features = ["json"] }
 url = "2.5"
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+native-tls = "0.2"
 
 # HTTP/SSE server transports
 axum = "0.8"
