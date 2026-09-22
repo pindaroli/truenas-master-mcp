@@ -70,6 +70,8 @@ fn removed(path: &str) -> Option<String> {
         "jails were removed in TrueNAS 26"
     } else if path == "kubernetes" || path.starts_with("kubernetes/") {
         "the TrueNAS Kubernetes service was removed in TrueNAS 26"
+    } else if path.starts_with("app/") && path.ends_with("/scale") {
+        "app.scale was the Kubernetes replica knob and is not in TrueNAS 25 or 26"
     } else if path == "chart/release" || path.starts_with("chart/release/") || path == "chart" {
         "chart releases were removed in TrueNAS 26"
     } else if path == "tftp" || path.starts_with("tftp/") {
@@ -399,7 +401,6 @@ fn action_call(
         ("app", "restart") => ("app.redeploy", true),
         ("app", "upgrade") => ("app.upgrade", true),
         ("app", "rollback") => ("app.rollback", true),
-        ("app", "scale") => ("app.update", false),
         ("app", "config") => ("app.config", false),
         ("app", "upgrade_options") => ("app.upgrade_summary", false),
         ("vm", "start") => ("vm.start", true),
@@ -724,6 +725,8 @@ mod tests {
         assert!(message.contains("removed"));
         assert!(translate("GET", "/api/v2.0/kubernetes", None).is_err());
         assert!(translate("GET", "/api/v2.0/chart/release", None).is_err());
+        let scale = translate("POST", "/api/v2.0/app/plex/scale", None).unwrap_err();
+        assert!(scale.to_string().contains("app.scale"));
     }
 
     #[test]

@@ -21,9 +21,9 @@ This MCP server provides access to TrueNAS API functionality including:
 - **Certificate Management**: List and get certificates
 - **Replication**: List, create, run replication tasks
 - **Cloud Sync**: List, create, run cloud sync tasks
-- **Kubernetes/Docker**: Get K8s status, list Docker images (SCALE)
+- **Docker**: List and pull images used by SCALE apps
 - **Task Management**: List, get status, abort running tasks
-- **Apps/Jails**: Full app lifecycle management (SCALE/CORE)
+- **Apps**: Full Docker app lifecycle on TrueNAS SCALE
 - **Caching**: Built-in caching for frequently accessed data
 
 ## Installation
@@ -206,9 +206,6 @@ for app in apps:
     if app.get("state") != "RUNNING":
         print(f"App not running: {app['name']} - {app.get('error', 'Unknown error')}")
 
-# Scale a deployment
-scale_app(app_name="my-app", replica_count=3)
-
 # Upgrade an app with available update
 upgrade_app(app_name="my-app", upgrade_version="1.2.3")
 ```
@@ -329,16 +326,12 @@ The server will be available at:
 - `get_app_config` - Get application configuration
 - `get_app_upgrade_options` - Get available upgrade options
 - `upgrade_app` - Upgrade an application
-- `scale_app` - Scale application replica count
 
-### Catalogs and Chart Releases
+### Catalogs
 - `list_catalog_items` - List available catalog items
 - `get_catalog` - Get catalog details
 - `get_catalog_trains` - Get catalog train versions
 - `get_catalog_item` - Get specific catalog item details
-- `list_chart_releases` - List deployed chart releases
-- `get_chart_release` - Get chart release details
-- `get_chart_release_resources` - Get chart release resources
 
 ### System Monitoring
 - `get_system_info` - Get system information
@@ -410,35 +403,12 @@ The server will be available at:
 - `get_task_status` - Get status of a specific task
 - `abort_task` - Abort a running task
 
-### Kubernetes (SCALE)
-- `get_kubernetes_status` - Get Kubernetes cluster status
-- `get_kubernetes_nodes` - List Kubernetes nodes
-- `get_kubernetes_pods` - List Kubernetes pods
-- `get_kubernetes_services` - List Kubernetes services
-
 ### Docker (SCALE)
 - `list_docker_images` - List all Docker images
 - `pull_docker_image` - Pull a Docker image
 
 ### Batch Operations
 - `batch` - Execute multiple operations in a single call
-
-### Other
-- `get_enclosure` - Get enclosure information
-- `get_support` - Get support information
-
-### Jails Management (CORE only)
-- `list_jails` - List all jails
-- `get_jail` - Get jail details by ID
-- `get_jail_by_name` - Get jail details by name
-- `create_jail` - Create a new jail
-- `update_jail` - Update jail configuration
-- `delete_jail` - Delete a jail
-- `start_jail` - Start a jail
-- `stop_jail` - Stop a jail
-- `restart_jail` - Restart a jail
-- `clone_jail` - Clone a jail
-- `list_jail_fstabs` - List jail fstab entries
 
 ### Other
 - `get_enclosure` - Get enclosure information
@@ -494,7 +464,7 @@ The server provides 80+ tools covering:
 - Pool, dataset, share, snapshot, and iSCSI management
 - VM, network, and service management
 - Application management (SCALE only)
-- Catalog and chart release access
+- Catalog access
 - Replication and cloud sync
 - Disk and certificate management
 

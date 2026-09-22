@@ -224,7 +224,7 @@ impl TrueNasServerImpl {
             "description": "Official MCP server for TrueNAS API access",
             "readonly": self.tool_config.readonly,
             "enabled_categories": format!("{:?}", self.tool_config.enabled_categories),
-            "instructions": "This server provides access to TrueNAS SCALE/CORE management features including:\n- User management\n- Pool and dataset management\n- SMB and NFS share management\n- Snapshot management\n- iSCSI target management\n- Apps/Jails management\n- System information\n\nUse --readonly flag or TRUENAS_READONLY=true to disable modification tools."
+            "instructions": "This server provides access to TrueNAS SCALE/CORE management features including:\n- User management\n- Pool and dataset management\n- SMB and NFS share management\n- Snapshot management\n- iSCSI target management\n- Docker app management\n- System information\n\nUse --readonly flag or TRUENAS_READONLY=true to disable modification tools."
         })
     }
 
@@ -270,14 +270,9 @@ impl TrueNasServerImpl {
             | "list_catalog_items"
             | "get_catalog"
             | "get_catalog_trains"
-            | "get_catalog_item"
-            | "list_chart_releases"
-            | "get_chart_release"
-            | "get_chart_release_resources" => (ToolCategory::Apps, false),
+            | "get_catalog_item" => (ToolCategory::Apps, false),
             "create_app" | "update_app" | "delete_app" | "start_app" | "stop_app"
-            | "restart_app" | "rollback_app" | "upgrade_app" | "scale_app" => {
-                (ToolCategory::Apps, true)
-            }
+            | "restart_app" | "rollback_app" | "upgrade_app" => (ToolCategory::Apps, true),
             // VMs
             "list_vms" | "get_vm" => (ToolCategory::Apps, false),
             "start_vm" | "stop_vm" | "restart_vm" | "powercycle_vm" | "create_vm" | "update_vm"
@@ -301,12 +296,6 @@ impl TrueNasServerImpl {
             // Cloud Sync
             "list_cloudsync_tasks" => (ToolCategory::System, false),
             "run_cloudsync_task" => (ToolCategory::System, true),
-            // Jails (CORE)
-            "list_jails" | "get_jail" | "get_jail_by_name" | "list_jail_fstabs" => {
-                (ToolCategory::Apps, false)
-            }
-            "create_jail" | "update_jail" | "delete_jail" | "start_jail" | "stop_jail"
-            | "restart_jail" | "clone_jail" => (ToolCategory::Apps, true),
             // Default
             _ => (ToolCategory::All, false),
         }
@@ -602,7 +591,7 @@ impl TrueNasServerImpl {
                     .map_err(|e| e.to_string())?;
 
                 let guide = format!(
-                    "# Maintenance Guide for {}\n\n## App Status\n- **Status:** {}\n- **Version:** {}\n\n## Maintenance Tasks\n1. Check app logs for errors\n2. Review resource usage (CPU/Memory)\n3. Verify data persistence\n4. Check for available updates\n5. Review backup status\n\n## Common Operations\n- **Restart:** Use the restart_app tool\n- **Stop:** Use the stop_app tool (use force=true if needed)\n- **Update:** Use the upgrade_app tool when updates are available\n\n## Troubleshooting\n- Check /var/log for application logs\n- Verify PVC (Persistent Volume Claims) are healthy\n- Check Kubernetes pod status",
+                    "# Maintenance Guide for {}\n\n## App Status\n- **Status:** {}\n- **Version:** {}\n\n## Maintenance Tasks\n1. Check app logs for errors\n2. Review resource usage (CPU/Memory)\n3. Verify data persistence\n4. Check for available updates\n5. Review backup status\n\n## Common Operations\n- **Restart:** Use the restart_app tool\n- **Stop:** Use the stop_app tool (use force=true if needed)\n- **Update:** Use the upgrade_app tool when updates are available\n\n## Troubleshooting\n- Check /var/log for application logs\n- Verify the app volumes are mounted\n- Check the app state with get_app",
                     app_name,
                     app.state.unwrap_or_else(|| "unknown".to_string()),
                     app.version.unwrap_or_else(|| "unknown".to_string())
@@ -969,7 +958,7 @@ impl TrueNasServerImpl {
                 let cloudsync_count = cloudsync_tasks.len();
 
                 let plan = format!(
-                    "# TrueNAS Disaster Recovery Plan\n\n## Executive Summary\n- **Total Pools:** {} ({} healthy, {} with issues)\n- **Replication Tasks:** {}\n- **Cloud Sync Tasks:** {}\n- **Recent Snapshots:** {}\n\n## Recovery Procedures\n\n### 1. Pool Failure Recovery\n- **If single pool fails:**\n  1. Check physical disk status\n  2. Review alert logs for root cause\n  3. If pool is degraded, replace failed disk\n  4. Initiate resilver\n  5. Verify data integrity after resilver\n\n- **If complete pool loss:**\n  1. Check if offsite replication exists\n  2. Restore from replicated backup\n  3. Verify restoration integrity\n\n### 2. Data Corruption Recovery\n- **Procedure:**\n  1. Identify affected dataset\n  2. Rollback to last known good snapshot\n  3. If snapshot unavailable, use replication\n  4. Verify data integrity post-recovery\n\n### 3. Application Recovery\n- **For Kubernetes apps:**\n  1. Check chart release status\n  2. Review PVC health\n  3. Rollback to previous version if needed\n  4. Restore application data from snapshots\n\n### 4. VM Recovery\n- **Procedure:**\n  1. Check VM snapshot history\n  2. Clone from last snapshot\n  3. Verify VM functionality\n  4. Update DNS if IP changed\n\n## Current Backup Status\n### Snapshots\n{}\n\n### Replication\n- **Configured tasks:** {}\n- **Status:** Review each task for last run status\n\n### Cloud Sync\n- **Configured tasks:** {}\n- **Status:** Review each task for last run status\n\n## Pre-Recovery Checklist\n- [ ] Notify stakeholders of outage\n- [ ] Document current state\n- [ ] Verify backup integrity\n- [ ] Prepare recovery environment\n- [ ] Test recovery procedure\n\n## Post-Recovery Checklist\n- [ ] Verify all services running\n- [ ] Confirm data integrity\n- [ ] Update documentation\n- [ ] Conduct post-mortem\n- [ ] Implement preventive measures",
+                    "# TrueNAS Disaster Recovery Plan\n\n## Executive Summary\n- **Total Pools:** {} ({} healthy, {} with issues)\n- **Replication Tasks:** {}\n- **Cloud Sync Tasks:** {}\n- **Recent Snapshots:** {}\n\n## Recovery Procedures\n\n### 1. Pool Failure Recovery\n- **If single pool fails:**\n  1. Check physical disk status\n  2. Review alert logs for root cause\n  3. If pool is degraded, replace failed disk\n  4. Initiate resilver\n  5. Verify data integrity after resilver\n\n- **If complete pool loss:**\n  1. Check if offsite replication exists\n  2. Restore from replicated backup\n  3. Verify restoration integrity\n\n### 2. Data Corruption Recovery\n- **Procedure:**\n  1. Identify affected dataset\n  2. Rollback to last known good snapshot\n  3. If snapshot unavailable, use replication\n  4. Verify data integrity post-recovery\n\n### 3. Application Recovery\n- **For Docker apps:**\n  1. Check app status with get_app\n  2. Review the app volumes\n  3. Rollback to previous version if needed\n  4. Restore application data from snapshots\n\n### 4. VM Recovery\n- **Procedure:**\n  1. Check VM snapshot history\n  2. Clone from last snapshot\n  3. Verify VM functionality\n  4. Update DNS if IP changed\n\n## Current Backup Status\n### Snapshots\n{}\n\n### Replication\n- **Configured tasks:** {}\n- **Status:** Review each task for last run status\n\n### Cloud Sync\n- **Configured tasks:** {}\n- **Status:** Review each task for last run status\n\n## Pre-Recovery Checklist\n- [ ] Notify stakeholders of outage\n- [ ] Document current state\n- [ ] Verify backup integrity\n- [ ] Prepare recovery environment\n- [ ] Test recovery procedure\n\n## Post-Recovery Checklist\n- [ ] Verify all services running\n- [ ] Confirm data integrity\n- [ ] Update documentation\n- [ ] Conduct post-mortem\n- [ ] Implement preventive measures",
                     pools.len(),
                     healthy_pools,
                     failed_pools,
@@ -1165,7 +1154,7 @@ impl TrueNasServerImpl {
                     .collect();
 
                 let troubleshooting = format!(
-                    "# Troubleshooting Guide\n\n## Issue Description\n{}\n\n## System Context\n- **Version:** {}\n- **Hostname:** {}\n- **Uptime:** {} seconds\n\n## Relevant Alerts\n{}\n\n## Pool Status\n{}\n\n## Application Status\n{}\n\n## Diagnostic Steps\n1. **Check Alerts** - Review above for clues\n2. **Verify Resources** - CPU, memory, storage usage\n3. **Review Logs** - Application and system logs\n4. **Check Dependencies** - Services, storage, network\n5. **Test Components** - Isolate the failing part\n\n## Common Solutions by Issue Type\n### Performance Issues\n- Check pool I/O utilization\n- Review VM/app resource limits\n- Consider scaling resources\n\n### Connectivity Issues\n- Verify network configuration\n- Check DNS settings\n- Review firewall rules\n\n### Storage Issues\n- Check pool status and resilver progress\n- Review disk SMART status\n- Verify snapshot space\n\n### Application Issues\n- Check app logs\n- Verify PVC health\n- Review resource quotas\n\n## Next Steps\n1. Review relevant alerts above\n2. Check specific component logs\n3. If unclear, gather more information:\n   - Pool status: `get_pool_status`\n   - Disk health: `get_disk_health`\n   - System events: `get_system_events`\n   - App logs: Check Kubernetes pods",
+                    "# Troubleshooting Guide\n\n## Issue Description\n{}\n\n## System Context\n- **Version:** {}\n- **Hostname:** {}\n- **Uptime:** {} seconds\n\n## Relevant Alerts\n{}\n\n## Pool Status\n{}\n\n## Application Status\n{}\n\n## Diagnostic Steps\n1. **Check Alerts** - Review above for clues\n2. **Verify Resources** - CPU, memory, storage usage\n3. **Review Logs** - Application and system logs\n4. **Check Dependencies** - Services, storage, network\n5. **Test Components** - Isolate the failing part\n\n## Common Solutions by Issue Type\n### Performance Issues\n- Check pool I/O utilization\n- Review VM/app resource limits\n- Consider scaling resources\n\n### Connectivity Issues\n- Verify network configuration\n- Check DNS settings\n- Review firewall rules\n\n### Storage Issues\n- Check pool status and resilver progress\n- Review disk SMART status\n- Verify snapshot space\n\n### Application Issues\n- Check app logs\n- Verify the app volumes\n- Review resource quotas\n\n## Next Steps\n1. Review relevant alerts above\n2. Check specific component logs\n3. If unclear, gather more information:\n   - Pool status: `get_pool_status`\n   - Disk health: `get_disk_health`\n   - System events: `get_system_events`\n   - App logs: Check Kubernetes pods",
                     issue,
                     system_info.version,
                     system_info.hostname,
@@ -1329,16 +1318,11 @@ impl TrueNasServerImpl {
             {"name": "get_app_config", "description": "Get the configuration of an application", "inputSchema": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}},
             {"name": "get_app_upgrade_options", "description": "Get available upgrade options for an application", "inputSchema": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}},
             {"name": "upgrade_app", "description": "Upgrade an application to a newer version", "inputSchema": {"type": "object", "properties": {"app_name": {"type": "string"}, "options": {"type": "object"}}, "required": ["app_name"]}},
-            {"name": "scale_app", "description": "Scale an application's replica count", "inputSchema": {"type": "object", "properties": {"app_name": {"type": "string"}, "replica": {"type": "integer"}}, "required": ["app_name", "replica"]}},
             // Catalogs (SCALE)
             {"name": "list_catalog_items", "description": "List all available catalog items from TrueNAS catalog", "inputSchema": {"type": "object"}},
             {"name": "get_catalog", "description": "Get details of a specific catalog", "inputSchema": {"type": "object", "properties": {"catalog_id": {"type": "string"}}, "required": ["catalog_id"]}},
             {"name": "get_catalog_trains", "description": "Get all available train versions from a catalog", "inputSchema": {"type": "object", "properties": {"catalog_id": {"type": "string"}}, "required": ["catalog_id"]}},
             {"name": "get_catalog_item", "description": "Get details of a specific item from a catalog", "inputSchema": {"type": "object", "properties": {"catalog_id": {"type": "string"}, "item": {"type": "string"}, "train": {"type": "string"}}, "required": ["catalog_id", "item", "train"]}},
-            // Chart Releases (SCALE)
-            {"name": "list_chart_releases", "description": "List all deployed chart releases (apps)", "inputSchema": {"type": "object"}},
-            {"name": "get_chart_release", "description": "Get details of a specific chart release", "inputSchema": {"type": "object", "properties": {"release_name": {"type": "string"}}, "required": ["release_name"]}},
-            {"name": "get_chart_release_resources", "description": "Get resources for a specific chart release", "inputSchema": {"type": "object", "properties": {"release_name": {"type": "string"}}, "required": ["release_name"]}},
             // VMs
             {"name": "list_vms", "description": "List all virtual machines on TrueNAS", "inputSchema": {"type": "object"}},
             {"name": "get_vm", "description": "Get details of a specific virtual machine", "inputSchema": {"type": "object", "properties": {"vm_id": {"type": "integer"}}, "required": ["vm_id"]}},
@@ -1387,28 +1371,12 @@ impl TrueNasServerImpl {
             {"name": "get_enclosure", "description": "Get enclosure information", "inputSchema": {"type": "object"}},
             // Support
             {"name": "get_support", "description": "Get support information", "inputSchema": {"type": "object"}},
-            // Jails (CORE only)
-            {"name": "list_jails", "description": "List all jails on TrueNAS CORE", "inputSchema": {"type": "object"}},
-            {"name": "get_jail", "description": "Get details of a specific jail by ID", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}}, "required": ["jail_id"]}},
-            {"name": "get_jail_by_name", "description": "Get details of a specific jail by name", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
-            {"name": "create_jail", "description": "Create a new jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "jail_base": {"type": "string"}, "ip4_addr": {"type": "string"}}, "required": ["name", "jail_base"]}},
-            {"name": "update_jail", "description": "Update an existing jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}, "updates": {"type": "object"}}, "required": ["jail_id"]}},
-            {"name": "delete_jail", "description": "Delete a jail from TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}, "force": {"type": "boolean"}}, "required": ["jail_id"]}},
-            {"name": "start_jail", "description": "Start a jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}}, "required": ["jail_id"]}},
-            {"name": "stop_jail", "description": "Stop a jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}}, "required": ["jail_id"]}},
-            {"name": "restart_jail", "description": "Restart a jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}}, "required": ["jail_id"]}},
-            {"name": "clone_jail", "description": "Clone a jail on TrueNAS CORE", "inputSchema": {"type": "object", "properties": {"jail_id": {"type": "integer"}, "name": {"type": "string"}}, "required": ["jail_id", "name"]}},
             // Batch operations
             {"name": "batch", "description": "Execute multiple operations in a single call", "inputSchema": {"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "arguments": {"type": "object"}}, "required": ["name"]}}}, "required": ["operations"]}},
             // Tasks
             {"name": "list_tasks", "description": "List all running and recent tasks", "inputSchema": {"type": "object"}},
             {"name": "get_task_status", "description": "Get the status of a specific task", "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": ["task_id"]}},
             {"name": "abort_task", "description": "Abort a running task", "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": ["task_id"]}},
-            // Kubernetes (SCALE)
-            {"name": "get_kubernetes_status", "description": "Get the status of the Kubernetes cluster", "inputSchema": {"type": "object"}},
-            {"name": "get_kubernetes_nodes", "description": "List Kubernetes nodes", "inputSchema": {"type": "object"}},
-            {"name": "get_kubernetes_pods", "description": "List Kubernetes pods", "inputSchema": {"type": "object"}},
-            {"name": "get_kubernetes_services", "description": "List Kubernetes services", "inputSchema": {"type": "object"}},
             // Docker
             {"name": "list_docker_images", "description": "List all Docker images", "inputSchema": {"type": "object"}},
             {"name": "pull_docker_image", "description": "Pull a Docker image", "inputSchema": {"type": "object", "properties": {"image": {"type": "string"}, "tag": {"type": "string"}}, "required": ["image"]}},
@@ -1856,23 +1824,6 @@ impl TrueNasServerImpl {
                     Err(e) => Err(e.to_string()),
                 }
             }
-            // Kubernetes
-            "get_kubernetes_status" => match self.tools.get_kubernetes_status().await {
-                Ok(status) => Ok(json!(status)),
-                Err(e) => Err(e.to_string()),
-            },
-            "get_kubernetes_nodes" => match self.tools.get_kubernetes_nodes().await {
-                Ok(nodes) => Ok(json!(nodes)),
-                Err(e) => Err(e.to_string()),
-            },
-            "get_kubernetes_pods" => match self.tools.get_kubernetes_pods().await {
-                Ok(pods) => Ok(json!(pods)),
-                Err(e) => Err(e.to_string()),
-            },
-            "get_kubernetes_services" => match self.tools.get_kubernetes_services().await {
-                Ok(services) => Ok(json!(services)),
-                Err(e) => Err(e.to_string()),
-            },
             // Docker images
             "list_docker_images" => match self.tools.list_docker_images().await {
                 Ok(images) => Ok(json!(images)),

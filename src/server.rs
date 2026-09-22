@@ -278,12 +278,6 @@ pub struct UpgradeAppRequest {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-pub struct ScaleAppRequest {
-    pub app_name: String,
-    pub replica: i32,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct GetCatalogRequest {
     pub catalog_id: String,
 }
@@ -298,16 +292,6 @@ pub struct GetCatalogItemRequest {
     pub catalog_id: String,
     pub item: String,
     pub train: String,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct GetChartReleaseRequest {
-    pub release_name: String,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct GetChartReleaseResourcesRequest {
-    pub release_name: String,
 }
 
 // === New Request Types for Extended Tools ===
@@ -516,60 +500,6 @@ pub struct UpdateUserRequest {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct DeleteUserRequest {
     pub user_id: i32,
-}
-
-// Jails (CORE only)
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct GetJailRequest {
-    pub jail_id: i32,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct GetJailByNameRequest {
-    pub name: String,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct CreateJailRequest {
-    pub name: String,
-    pub jail_base: String,
-    #[serde(default)]
-    pub ip4_addr: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct UpdateJailRequest {
-    pub jail_id: i32,
-    #[serde(default)]
-    pub updates: Option<serde_json::Value>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct DeleteJailRequest {
-    pub jail_id: i32,
-    #[serde(default)]
-    pub force: Option<bool>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct StartJailRequest {
-    pub jail_id: i32,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct StopJailRequest {
-    pub jail_id: i32,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct RestartJailRequest {
-    pub jail_id: i32,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct CloneJailRequest {
-    pub jail_id: i32,
-    pub name: String,
 }
 
 /// TrueNAS MCP Server
@@ -831,10 +761,7 @@ impl TrueNasServer {
         let _ = self.tools.get_system_info().await;
     }
 
-    #[tool(
-        name = "list_apps",
-        description = "List all applications (jails/containers) on TrueNAS"
-    )]
+    #[tool(name = "list_apps", description = "List Docker apps on TrueNAS SCALE")]
     async fn list_apps(&self) {
         let _ = self.tools.list_apps().await;
     }
@@ -948,14 +875,6 @@ impl TrueNasServer {
     }
 
     #[tool(
-        name = "scale_app",
-        description = "Scale an application's replica count"
-    )]
-    async fn scale_app(&self, _req: Parameters<ScaleAppRequest>) {
-        let _ = self.tools.scale_app(&_req.0.app_name, _req.0.replica).await;
-    }
-
-    #[tool(
         name = "list_catalog_items",
         description = "List all available catalog items from TrueNAS catalog"
     )]
@@ -987,33 +906,6 @@ impl TrueNasServer {
         let _ = self
             .tools
             .get_catalog_item(&_req.0.catalog_id, &_req.0.item, &_req.0.train)
-            .await;
-    }
-
-    #[tool(
-        name = "list_chart_releases",
-        description = "List all deployed chart releases (apps)"
-    )]
-    async fn list_chart_releases(&self) {
-        let _ = self.tools.list_chart_releases().await;
-    }
-
-    #[tool(
-        name = "get_chart_release",
-        description = "Get details of a specific chart release"
-    )]
-    async fn get_chart_release(&self, _req: Parameters<GetChartReleaseRequest>) {
-        let _ = self.tools.get_chart_release(&_req.0.release_name).await;
-    }
-
-    #[tool(
-        name = "get_chart_release_resources",
-        description = "Get resources for a specific chart release"
-    )]
-    async fn get_chart_release_resources(&self, _req: Parameters<GetChartReleaseResourcesRequest>) {
-        let _ = self
-            .tools
-            .get_chart_release_resources(&_req.0.release_name)
             .await;
     }
 
@@ -1303,86 +1195,5 @@ impl TrueNasServer {
     #[tool(name = "get_support", description = "Get support information")]
     async fn get_support(&self) {
         let _ = self.tools.get_support().await;
-    }
-
-    // === Jails Tools (CORE only) ===
-
-    #[cfg(feature = "core")]
-    #[tool(name = "list_jails", description = "List all jails on TrueNAS CORE")]
-    async fn list_jails(&self) {
-        let _ = self.tools.list_jails().await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(
-        name = "get_jail",
-        description = "Get details of a specific jail by ID"
-    )]
-    async fn get_jail(&self, _req: Parameters<GetJailRequest>) {
-        let _ = self.tools.get_jail(_req.0.jail_id).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(
-        name = "get_jail_by_name",
-        description = "Get details of a specific jail by name"
-    )]
-    async fn get_jail_by_name(&self, _req: Parameters<GetJailByNameRequest>) {
-        let _ = self.tools.get_jail_by_name(&_req.0.name).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(
-        name = "create_jail",
-        description = "Create a new jail on TrueNAS CORE"
-    )]
-    async fn create_jail(&self, _req: Parameters<CreateJailRequest>) {
-        let _ = self
-            .tools
-            .create_jail(&_req.0.name, &_req.0.jail_base, _req.0.ip4_addr.as_deref())
-            .await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(
-        name = "update_jail",
-        description = "Update an existing jail on TrueNAS CORE"
-    )]
-    async fn update_jail(&self, _req: Parameters<UpdateJailRequest>) {
-        let updates = _req.0.updates.unwrap_or_default();
-        let _ = self.tools.update_jail(_req.0.jail_id, updates).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(name = "delete_jail", description = "Delete a jail from TrueNAS CORE")]
-    async fn delete_jail(&self, _req: Parameters<DeleteJailRequest>) {
-        let _ = self
-            .tools
-            .delete_jail(_req.0.jail_id, _req.0.force.unwrap_or(false))
-            .await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(name = "start_jail", description = "Start a jail on TrueNAS CORE")]
-    async fn start_jail(&self, _req: Parameters<StartJailRequest>) {
-        let _ = self.tools.start_jail(_req.0.jail_id).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(name = "stop_jail", description = "Stop a jail on TrueNAS CORE")]
-    async fn stop_jail(&self, _req: Parameters<StopJailRequest>) {
-        let _ = self.tools.stop_jail(_req.0.jail_id).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(name = "restart_jail", description = "Restart a jail on TrueNAS CORE")]
-    async fn restart_jail(&self, _req: Parameters<RestartJailRequest>) {
-        let _ = self.tools.restart_jail(_req.0.jail_id).await;
-    }
-
-    #[cfg(feature = "core")]
-    #[tool(name = "clone_jail", description = "Clone a jail on TrueNAS CORE")]
-    async fn clone_jail(&self, _req: Parameters<CloneJailRequest>) {
-        let _ = self.tools.clone_jail(_req.0.jail_id, &_req.0.name).await;
     }
 }

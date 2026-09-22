@@ -366,7 +366,7 @@ pub struct SystemInfo {
     pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
-/// App information for TrueNAS apps/jails
+/// App information for a TrueNAS SCALE Docker app
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AppInfo {
     pub name: String,
@@ -503,28 +503,6 @@ pub struct Certificate {
     pub from: Option<i64>,
     #[serde(default)]
     pub until: Option<i64>,
-}
-
-/// Kubernetes status
-#[derive(Debug, Deserialize, Serialize)]
-pub struct KubernetesStatus {
-    pub node_ip: String,
-    pub cluster_ip: String,
-    pub cluster_cidr: String,
-    pub service_cidr: String,
-    pub status: String,
-}
-
-/// Jail response
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Jail {
-    pub id: i32,
-    pub name: String,
-    pub state: String,
-    #[serde(default)]
-    pub ip4_addr: Option<String>,
-    #[serde(default)]
-    pub ip6_addr: Option<String>,
 }
 
 /// Enclosure info
@@ -1140,13 +1118,11 @@ impl TrueNasTools {
         self.client.get("/api/v2.0/system/info").await
     }
 
-    // === Apps (Jails/Containers) ===
-    #[cfg(feature = "scale")]
-    /// List all applications/jails on TrueNAS
+    // === Apps ===
+    /// List Docker apps on TrueNAS SCALE
     pub async fn list_apps(&self) -> Result<Vec<AppInfo>> {
-        // For TrueNAS SCALE with apps (Kubernetes/Helm charts)
         #[derive(Deserialize)]
-        struct ScaleAppResponse {
+        struct AppResponse {
             #[serde(default)]
             name: String,
             #[serde(default)]
@@ -1157,62 +1133,14 @@ impl TrueNasTools {
             description: Option<String>,
         }
 
-        #[derive(Deserialize)]
-        struct ScaleAppsList {
-            #[serde(default)]
-            apps: Vec<ScaleAppResponse>,
-        }
-
-        // Try SCALE apps endpoint first
-        let scale_result: Option<ScaleAppsList> = self.client.get("/api/v2.0/app").await.ok();
-        if let Some(response) = scale_result {
-            return Ok(response
-                .apps
-                .into_iter()
-                .map(|app| AppInfo {
-                    name: app.name,
-                    version: app.version,
-                    state: app.state,
-                    description: app.description,
-                    port: None,
-                    image: None,
-                })
-                .collect());
-        }
-
-        // Fall back to CORE jail endpoint
-        #[derive(Deserialize)]
-        #[allow(dead_code)]
-        struct JailResponse {
-            #[serde(default)]
-            id: i32,
-            #[serde(default)]
-            name: String,
-            #[serde(default)]
-            state: String,
-        }
-
-        #[derive(Deserialize)]
-        struct JailsList {
-            #[serde(default)]
-            #[serde(rename = "jails")]
-            jails_list: Vec<JailResponse>,
-        }
-
-        let jails: JailsList = self
-            .client
-            .get("/api/v2.0/jail")
-            .await
-            .unwrap_or(JailsList { jails_list: vec![] });
-
-        Ok(jails
-            .jails_list
+        let apps: Vec<AppResponse> = self.client.get("/api/v2.0/app").await?;
+        Ok(apps
             .into_iter()
-            .map(|jail| AppInfo {
-                name: jail.name,
-                version: None,
-                state: Some(jail.state),
-                description: None,
+            .map(|app| AppInfo {
+                name: app.name,
+                version: app.version,
+                state: app.state,
+                description: app.description,
                 port: None,
                 image: None,
             })
@@ -1222,10 +1150,8 @@ impl TrueNasTools {
     /// Get details of a specific application
     pub async fn get_app(&self, app_name: &str) -> Result<AppInfo> {
         let encoded = urlencoding::encode(app_name);
-
-        // Try SCALE app endpoint first
         #[derive(Deserialize)]
-        struct ScaleAppDetail {
+        struct AppDetail {
             #[serde(default)]
             name: String,
             #[serde(default)]
@@ -1240,46 +1166,17 @@ impl TrueNasTools {
             image: Option<String>,
         }
 
-        let scale_result: Option<ScaleAppDetail> = self
+        let app: AppDetail = self
             .client
             .get(&format!("/api/v2.0/app/{}", encoded))
-            .await
-            .ok();
-        if let Some(app) = scale_result {
-            return Ok(AppInfo {
-                name: app.name,
-                version: app.version,
-                state: app.state,
-                description: app.description,
-                port: app.port,
-                image: app.image,
-            });
-        }
-
-        // Fall back to CORE jail endpoint
-        #[derive(Deserialize)]
-        #[allow(dead_code)]
-        struct JailDetail {
-            #[serde(default)]
-            id: i32,
-            #[serde(default)]
-            name: String,
-            #[serde(default)]
-            state: String,
-        }
-
-        let jail: JailDetail = self
-            .client
-            .get(&format!("/api/v2.0/jail/{}", encoded))
             .await?;
-
         Ok(AppInfo {
-            name: jail.name,
-            version: None,
-            state: Some(jail.state),
-            description: None,
-            port: None,
-            image: None,
+            name: app.name,
+            version: app.version,
+            state: app.state,
+            description: app.description,
+            port: app.port,
+            image: app.image,
         })
     }
 
@@ -1524,49 +1421,6 @@ impl TrueNasTools {
                 "/api/v2.0/catalog/{}/{}/{}",
                 encoded_catalog, encoded_item, train
             ))
-            .await
-    }
-
-    /// List chart releases (deployed apps)
-    #[allow(dead_code)]
-    pub async fn list_chart_releases(&self) -> Result<serde_json::Value> {
-        self.client.get("/api/v2.0/chart/release").await
-    }
-
-    /// Get chart release details
-    #[allow(dead_code)]
-    pub async fn get_chart_release(&self, release_name: &str) -> Result<serde_json::Value> {
-        let encoded = urlencoding::encode(release_name);
-        self.client
-            .get(&format!("/api/v2.0/chart/release/{}", encoded))
-            .await
-    }
-
-    /// Get chart release resources
-    #[allow(dead_code)]
-    pub async fn get_chart_release_resources(
-        &self,
-        release_name: &str,
-    ) -> Result<serde_json::Value> {
-        let encoded = urlencoding::encode(release_name);
-        self.client
-            .get(&format!("/api/v2.0/chart/release/{}/resources", encoded))
-            .await
-    }
-
-    /// Scale an app replica set
-    #[allow(dead_code)]
-    pub async fn scale_app(&self, app_name: &str, replica: i32) -> Result<AppInfo> {
-        let encoded = urlencoding::encode(app_name);
-        #[derive(Serialize)]
-        struct ScaleRequest {
-            replica: i32,
-        }
-        self.client
-            .post(
-                &format!("/api/v2.0/app/{}/scale", encoded),
-                &ScaleRequest { replica },
-            )
             .await
     }
 
@@ -2232,199 +2086,6 @@ impl TrueNasTools {
                 &format!("/api/v2.0/certificate/{}", cert_id),
                 &DeleteRequest { force },
             )
-            .await
-    }
-
-    // === Kubernetes (SCALE) ===
-    #[cfg(feature = "scale")]
-    /// Get Kubernetes status
-    #[allow(dead_code)]
-    pub async fn get_kubernetes_status(&self) -> Result<KubernetesStatus> {
-        self.client.get("/api/v2.0/kubernetes").await
-    }
-
-    /// Configure Kubernetes
-    #[allow(dead_code)]
-    pub async fn configure_kubernetes(
-        &self,
-        node_ip: &str,
-        cluster_cidr: &str,
-        service_cidr: &str,
-    ) -> Result<KubernetesStatus> {
-        #[derive(Serialize)]
-        struct K8sConfig {
-            node_ip: String,
-            cluster_cidr: String,
-            service_cidr: String,
-        }
-        self.client
-            .post(
-                "/api/v2.0/kubernetes",
-                &K8sConfig {
-                    node_ip: node_ip.to_string(),
-                    cluster_cidr: cluster_cidr.to_string(),
-                    service_cidr: service_cidr.to_string(),
-                },
-            )
-            .await
-    }
-
-    /// List Kubernetes backups
-    #[allow(dead_code)]
-    pub async fn list_kubernetes_backups(&self) -> Result<serde_json::Value> {
-        self.client.get("/api/v2.0/kubernetes/backups").await
-    }
-
-    /// Create Kubernetes backup
-    #[allow(dead_code)]
-    pub async fn create_kubernetes_backup(&self, name: &str) -> Result<serde_json::Value> {
-        #[derive(Serialize)]
-        struct BackupRequest {
-            name: String,
-        }
-        self.client
-            .post(
-                "/api/v2.0/kubernetes/backups",
-                &BackupRequest {
-                    name: name.to_string(),
-                },
-            )
-            .await
-    }
-
-    /// Restore Kubernetes backup
-    #[allow(dead_code)]
-    pub async fn restore_kubernetes_backup(&self, backup_name: &str) -> Result<serde_json::Value> {
-        let encoded = urlencoding::encode(backup_name);
-        self.client
-            .post(
-                &format!("/api/v2.0/kubernetes/backups/{}/restore", encoded),
-                &(),
-            )
-            .await
-    }
-
-    // === Jails (CORE) ===
-    #[cfg(feature = "core")]
-    /// List jails
-    #[allow(dead_code)]
-    pub async fn list_jails(&self) -> Result<Vec<Jail>> {
-        self.client.get("/api/v2.0/jail").await
-    }
-
-    /// Get jail by ID
-    #[allow(dead_code)]
-    pub async fn get_jail(&self, jail_id: i32) -> Result<Jail> {
-        self.client
-            .get(&format!("/api/v2.0/jail/{}", jail_id))
-            .await
-    }
-
-    /// Get jail by name
-    #[allow(dead_code)]
-    pub async fn get_jail_by_name(&self, name: &str) -> Result<Jail> {
-        let encoded = urlencoding::encode(name);
-        self.client
-            .get(&format!("/api/v2.0/jail/{}", encoded))
-            .await
-    }
-
-    /// Create jail
-    #[allow(dead_code)]
-    pub async fn create_jail(
-        &self,
-        name: &str,
-        jail_base: &str,
-        ip4_addr: Option<&str>,
-    ) -> Result<Jail> {
-        #[derive(Serialize)]
-        struct CreateJailRequest {
-            name: String,
-            jail_base: String,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            ip4_addr: Option<String>,
-        }
-        self.client
-            .post(
-                "/api/v2.0/jail",
-                &CreateJailRequest {
-                    name: name.to_string(),
-                    jail_base: jail_base.to_string(),
-                    ip4_addr: ip4_addr.map(|s| s.to_string()),
-                },
-            )
-            .await
-    }
-
-    /// Update jail
-    #[allow(dead_code)]
-    pub async fn update_jail(&self, jail_id: i32, updates: serde_json::Value) -> Result<Jail> {
-        self.client
-            .put(&format!("/api/v2.0/jail/{}", jail_id), &updates)
-            .await
-    }
-
-    /// Delete jail
-    #[allow(dead_code)]
-    pub async fn delete_jail(&self, jail_id: i32, force: bool) -> Result<()> {
-        #[derive(Serialize)]
-        struct DeleteRequest {
-            force: bool,
-        }
-        self.client
-            .delete_with_body(
-                &format!("/api/v2.0/jail/{}", jail_id),
-                &DeleteRequest { force },
-            )
-            .await
-    }
-
-    /// Start jail
-    #[allow(dead_code)]
-    pub async fn start_jail(&self, jail_id: i32) -> Result<Jail> {
-        self.client
-            .post(&format!("/api/v2.0/jail/{}/start", jail_id), &())
-            .await
-    }
-
-    /// Stop jail
-    #[allow(dead_code)]
-    pub async fn stop_jail(&self, jail_id: i32) -> Result<Jail> {
-        self.client
-            .post(&format!("/api/v2.0/jail/{}/stop", jail_id), &())
-            .await
-    }
-
-    /// Restart jail
-    #[allow(dead_code)]
-    pub async fn restart_jail(&self, jail_id: i32) -> Result<Jail> {
-        self.client
-            .post(&format!("/api/v2.0/jail/{}/restart", jail_id), &())
-            .await
-    }
-
-    /// Clone jail
-    #[allow(dead_code)]
-    pub async fn clone_jail(&self, jail_id: i32, name: &str) -> Result<Jail> {
-        #[derive(Serialize)]
-        struct CloneRequest {
-            name: String,
-        }
-        self.client
-            .post(
-                &format!("/api/v2.0/jail/{}/clone", jail_id),
-                &CloneRequest {
-                    name: name.to_string(),
-                },
-            )
-            .await
-    }
-
-    /// List jail fstab entries
-    #[allow(dead_code)]
-    pub async fn list_jail_fstabs(&self, jail_id: i32) -> Result<serde_json::Value> {
-        self.client
-            .get(&format!("/api/v2.0/jail/{}/fstab", jail_id))
             .await
     }
 
@@ -3191,26 +2852,6 @@ impl TrueNasTools {
         self.client
             .post(&format!("/api/v2.0/core/abort_task/{}", task_id), &())
             .await
-    }
-
-    // === Kubernetes ===
-
-    /// Get Kubernetes nodes
-    #[allow(dead_code)]
-    pub async fn get_kubernetes_nodes(&self) -> Result<serde_json::Value> {
-        self.client.get("/api/v2.0/kubernetes/node").await
-    }
-
-    /// Get Kubernetes pods
-    #[allow(dead_code)]
-    pub async fn get_kubernetes_pods(&self) -> Result<serde_json::Value> {
-        self.client.get("/api/v2.0/kubernetes/pod").await
-    }
-
-    /// Get Kubernetes services
-    #[allow(dead_code)]
-    pub async fn get_kubernetes_services(&self) -> Result<serde_json::Value> {
-        self.client.get("/api/v2.0/kubernetes/service").await
     }
 
     // === Docker ===

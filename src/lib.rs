@@ -12,7 +12,7 @@
 //! - **Share Management**: Manage SMB and NFS shares
 //! - **Snapshot Management**: Create and manage ZFS snapshots
 //! - **iSCSI Management**: Configure iSCSI targets
-//! - **App Management**: Deploy and manage applications (SCALE) or jails (CORE)
+//! - **App Management**: Deploy and manage TrueNAS SCALE Docker apps
 //! - **System Monitoring**: View system info, alerts, and updates
 //! - **Network Management**: Configure interfaces, routes, and DNS
 //! - **Service Management**: Start, stop, and restart services

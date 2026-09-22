@@ -57,11 +57,11 @@ fn default_timeout() -> u64 {
 #[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TrueNasVersion {
-    /// TrueNAS SCALE (Kubernetes-based apps)
+    /// TrueNAS SCALE (Docker apps)
     #[default]
     #[serde(alias = "scale", alias = "SCALE", alias = "sc", alias = "SC")]
     Scale,
-    /// TrueNAS CORE (Jail-based apps)
+    /// TrueNAS CORE
     #[serde(alias = "core", alias = "CORE", alias = "cr", alias = "CR")]
     Core,
 }

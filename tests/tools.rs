@@ -3,8 +3,8 @@
 use serde_json::json;
 use truenas_master_mcp::tools::{
     Alert, AppInfo, Certificate, CloudCredential, CloudSyncTask, Dataset, DnsConfig, EnclosureInfo,
-    Group, IscsiTarget, Jail, KubernetesStatus, NetworkInterface, NetworkRoute, NfsExport, Pool,
-    ReplicationTask, Service, SmbShare, Snapshot, SystemInfo, UpdateCheck, User, Vm,
+    Group, IscsiTarget, NetworkInterface, NetworkRoute, NfsExport, Pool, ReplicationTask, Service,
+    SmbShare, Snapshot, SystemInfo, UpdateCheck, User, Vm,
 };
 
 mod serialization_tests {
@@ -351,37 +351,6 @@ mod serialization_tests {
         let json = serde_json::to_string(&cert).unwrap();
         let decoded: Certificate = serde_json::from_str(&json).unwrap();
         assert_eq!(cert.name, decoded.name);
-    }
-
-    #[test]
-    fn test_kubernetes_status_serialization() {
-        let k8s = KubernetesStatus {
-            node_ip: "192.168.1.50".to_string(),
-            cluster_ip: "10.96.0.1".to_string(),
-            cluster_cidr: "10.244.0.0/16".to_string(),
-            service_cidr: "10.96.0.0/12".to_string(),
-            status: "HEALTHY".to_string(),
-        };
-
-        let json = serde_json::to_string(&k8s).unwrap();
-        let decoded: KubernetesStatus = serde_json::from_str(&json).unwrap();
-        assert_eq!(k8s.status, decoded.status);
-    }
-
-    #[test]
-    fn test_jail_serialization() {
-        let jail = Jail {
-            id: 1,
-            name: "my-jail".to_string(),
-            state: "RUNNING".to_string(),
-            ip4_addr: Some("192.168.1.100".to_string()),
-            ip6_addr: None,
-        };
-
-        let json = serde_json::to_string(&jail).unwrap();
-        let decoded: Jail = serde_json::from_str(&json).unwrap();
-        assert_eq!(jail.name, decoded.name);
-        assert!(decoded.ip6_addr.is_none());
     }
 
     #[test]

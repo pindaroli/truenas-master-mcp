@@ -1,6 +1,6 @@
 [package]
 name = "truenas-master-mcp"
-version = "1.0.0-alpha.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 description = "Official MCP server for TrueNAS API access"
 license = "MIT"
