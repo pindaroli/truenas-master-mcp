@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 //! # TrueNAS Master MCP Server
 //!
 //! An MCP server for TrueNAS API access.
@@ -57,6 +59,7 @@ pub mod error;
 pub mod rest_map;
 mod rpc;
 pub mod server;
+pub mod service;
 pub mod tools;
 
 // Re-export commonly used types
